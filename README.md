@@ -1,4 +1,4 @@
 # Practical-Machine-Learning
 Practical Machine Learning Project
 
-Please open R_MD.html
+Please download the repo and open the compiled HTML document.
