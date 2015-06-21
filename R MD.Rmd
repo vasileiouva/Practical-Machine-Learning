@@ -1,0 +1,85 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Vasileios Vasileiou"
+date: "Sunday, June 21, 2015"
+output: html_document
+---
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+First we Read the Data and we examine a barplot of the 5 different ways of barbell lifts
+
+```{r}
+set.seed(8044193)
+
+library("ggplot2")
+library("caret")
+train <- read.csv("pml-training.csv", na.strings = c("", NA, "#DIV/0!"))
+test <- read.csv("pml-testing.csv", na.strings = c("", NA, "#DIV/0!"))
+
+qplot(classe, data = train)
+```
+
+Then we get rid of the variables with more than 80% of missing values
+
+```{r}
+mis <- sapply(train,is.na)
+mis <- apply(mis,2,sum)
+mis.prop <- mis/dim(train)[1]
+train <- train[-which(mis.prop > 0.8)]
+test <- test[-which(mis.prop > 0.8)]
+```
+
+After we get rid of the factor variables as they don't seem very useful in this project, we standardize and we impute the missing data using k-nearest neighbours
+
+```{r}
+nums  <- sapply(train, is.numeric)
+nums[1]  <- FALSE
+dummy <- train[ , nums]
+
+## Standardizing
+preObj <- preProcess(dummy, method = c("center","scale"))
+dummy <- predict(preObj, dummy)
+
+## Imputing missing data
+mis <- preProcess(dummy,method = "knnImpute")
+dummy <- predict(mis, dummy)
+train <- data.frame(dummy, train$classe)
+```
+
+Then We fit two models using 15-fold Cross Validation
+
+```{r, warning=FALSE}
+## 15-fold Cross Validation
+fitControl <- trainControl(method = "cv", number = 15)
+## Model1 Naive Bayes
+nbFit <- train(train.classe ~ ., data = train, method = "nb", trControl = fitControl)
+## Model 2 Random Forest
+rfFit <- train(train.classe ~ ., data = train, method = "rf", trControl = fitControl)
+```
+Excellent accuracy for the random forest model with high accuracy (over 99%) and 0.06% in sample error. On the other hand, the Naive Bayes Model did not perform as good as we can see from the tables. Of course, one would expect that the out of sample error would be higher because the models are tuned to fit the training data
+
+```{r}
+rfFit
+print(nbFit)
+rfFit$finalModel
+```
+
+Then we standardize the testing set based on the standardization of the training set
+
+```{r}
+test <- test[,-c(1,2,5,6,60)]
+test <- predict(preObj, test)
+```
+
+And then we Compare the Predictions
+
+```{r, warning=FALSE}
+R.Forest <- predict(rfFit, newdata = test)
+N.Bayes <- predict(nbFit, newdata = test)
+print(table(R.Forest,N.Bayes))
+13/20
+```
+
+And as we can see,  there is some agreement between the two models.
+However, The Random Forest model managed to classify all the testing set observations correctly. This makes the out of sample error estimator 100% for the Random Forest model and 65% for the Naive Bayes model. This indicates some agreement between the in sample and out of sample error. Nevertheless, we have to keep in mind that the testing data are few. We might have different results (and maybe not 100% accuracy) in larger test sets.
